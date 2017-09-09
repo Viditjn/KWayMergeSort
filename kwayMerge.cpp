@@ -5,10 +5,21 @@
 #include <string>
 using namespace std;
 
+//debug data
+
+vector <long long int > countPerFile;
+
+vector <int > colData;
+
 typedef struct node{
   long long int size;
   long long int col;
 }node;
+
+struct record{
+  vector <string> data;
+  int fiNum;
+};
 
 vector <int> compareOrder;
 int compareLen;
@@ -44,6 +55,7 @@ node rowSize(){
     char * token = strtok(si,delim);
     token = strtok(NULL,delim);
     Rsize += atoi(token);
+    colData.push_back(atoi(token));
     free(si);
     colNum++;
   }
@@ -81,36 +93,166 @@ bool sortAsc(const vector<string> a,const vector<string> b){
   return true;
 }
 
-void writeToFile(vector <vector <string> > vec,int fileNum){
+class mycomp {
+public:
+int operator() (const record& a,const record& b) const {
+  int i;
+  for(i=0;i<compareLen;i++){
+    if(a.data[compareOrder[i]]==b.data[compareOrder[i]])
+      i++;
+    else
+      return (a.data[compareOrder[i]] < b.data[compareOrder[i]]);
+  }
+  return 1;
+}
+};
+
+void writeToFile(vector <vector <string> > vec,int fileNum,long long int sizeL){
   string fileName;
   stringstream convert;
   convert << fileNum;
   fileName = convert.str() + ".txt";
-  cout << fileName << endl;
+  //cout << fileName << endl;
   ofstream myfile(fileName.c_str());
-  // for(int i = 0;i<vec.size();i++){
-  //   for(int j=0;j<vec[0].size();j++)
-  //     cout << vec[i][j] << " ";
-  //   cout << endl;
-  // }
   sort(vec.begin(),vec.end(),sortAsc);
-  // cout << "sorting done !" << endl;
-  // for(int i = 0;i<vec.size();i++){
-  //   for(int j=0;j<vec[0].size();j++)
-  //     cout << vec[i][j] << " ";
-  //   cout << endl;
-  // }
-  //}
   if(myfile.is_open()){
-    for(int i=0;i<vec.size();i++){
+    for(int i=0;i<sizeL;i++){
       string s = vec[i][0];
       for(int j=1;j<vec[0].size()-1;j++)
-        s = s + " " + vec[i][j];
-      s = s + " " + vec[i][vec[0].size()-1] + '\n';
+        s = s + "  " + vec[i][j];
+      s = s + "  " + vec[i][vec[0].size()-1] + '\n';
       myfile << s;
     }
     myfile.close();
   }
+}
+
+void writeData(ofstream& out, vector <vector <string> > outBuf){
+  //cout << "writing data iter" << endl;
+  if(out.is_open()){
+    for(long long int i=0;i<outBuf.size();i++){
+      string s = outBuf[i][0];
+      for(long long int j=1;j<outBuf[0].size()-1;j++)
+        s = s + "  " + outBuf[i][j];
+      s = s + "  " + outBuf[i][outBuf[0].size()-1] + '\n';
+      out << s;
+    }
+  }
+  return;
+}
+
+int iterNum = 0;
+
+void merge(string outFile,int totalFiles,long long int blockSize,long long int totalCol){
+  //cout << "merging start" << endl;
+  vector <vector <record> > vecR(totalFiles);
+  vector < ifstream* > filePointers;
+  vector <int> vecCount(totalFiles);
+  bool fileEnd[totalFiles];
+  for(int i=0;i<totalFiles;i++){
+    fileEnd[i] = false;
+    vecCount[i] = 0;
+  }
+  vector <vector <string> > outBuffer(blockSize,vector <string>(totalCol));
+  string fileName;
+  for(int i = 0;i<totalFiles;i++){
+    ifstream *ftmp = new ifstream((to_string(i)+ ".txt").c_str());
+    fileName = to_string(i) + ".txt";
+    filePointers.push_back(ftmp);
+  }
+  long long int index;
+  for(int i=0;i<totalFiles;i++){
+    long long int co = 0;
+    vector <record> ans;
+    string line;
+    while(getline(*filePointers[i],line) && co<blockSize){
+      countPerFile[i]--;
+      vector <string> tempStr;
+      index = 0;
+      for(int q=0;q<colData.size();q++){
+        tempStr.push_back(line.substr(index,colData[q]));
+        index += colData[q] + 2;
+      }
+      record temp;
+      temp.data = tempStr;
+      temp.fiNum = i;
+      ans.push_back(temp);
+      co++;
+    }
+    vecR[i] = ans;
+    ans.clear();
+    cout << "iteration Number : " << iterNum << endl;
+    iterNum++;
+    // for(int i=0;i<countPerFile.size();i++)
+    //   cout << countPerFile[i] << " ";
+    // cout << endl;
+    // for(int i=0;i<countPerFile.size();i++)
+    //   cout << vecR[i].size() << " ";
+    // cout << endl;
+  }
+  cout << "done collecting" << endl;
+
+  ofstream outPointer(outFile.c_str());
+
+  priority_queue <record, vector <record>, mycomp > pq;
+  for(int i=0;i<totalFiles;i++){
+    if(vecR[i].size()>0)
+      pq.push(vecR[i][0]);
+  }
+  record tmp = pq.top();
+  long long int i = 0;
+  long long int totalCo = 0;
+  long long int totalPush = 0;
+  while(pq.empty()==false){
+    if(i == blockSize){
+      writeData(outPointer,outBuffer);
+      i = 0;
+      vector <vector <string> > outBuffer(blockSize,vector <string>(totalCol));
+    }
+    record tmp = pq.top();
+    pq.pop();
+    totalCo++;
+    outBuffer[i] = tmp.data;
+    i++;
+    vecCount[tmp.fiNum]++;
+    if(vecCount[tmp.fiNum]<vecR[tmp.fiNum].size()){
+      pq.push(vecR[tmp.fiNum][vecCount[tmp.fiNum]]);
+      totalPush++;
+    }
+    else{
+      long long int co = 0;
+      vector <record> ans;
+      string line;
+      while(getline(*filePointers[tmp.fiNum],line) && co<blockSize){
+        countPerFile[tmp.fiNum]--;
+        vector <string> tempStr;
+        index = 0;
+        for(int q=0;q<colData.size();q++){
+          tempStr.push_back(line.substr(index,colData[q]));
+          index += colData[q] + 2;
+        }
+        record temp;
+        temp.data = tempStr;
+        temp.fiNum = tmp.fiNum;
+        ans.push_back(temp);
+        co++;
+      }
+      iterNum++;
+      vecR[tmp.fiNum] = ans;
+      vecCount[tmp.fiNum] = 0;
+      if(vecR[tmp.fiNum].size()>0){
+        pq.push(vecR[tmp.fiNum][0]);
+        totalPush++;
+        vecCount[tmp.fiNum]++;
+      }
+    }
+  }
+  outPointer.close();
+  for(int i=0;i<countPerFile.size();i++)
+    cout << countPerFile[i] << " ";
+  cout << endl;
+  cout << "total count : " << totalCo << " " << totalPush << endl;
+  return;
 }
 
 int main(int argc, char** argv){
@@ -126,6 +268,12 @@ int main(int argc, char** argv){
   for(int i=5;i<argc;i++)
     compareOrder.push_back(atoi((string(argv[i]).substr(1,strlen(argv[i]))).c_str()));
   compareLen = compareOrder.size();
+  for(int i=0;i<compareLen;i++){
+    if(compareOrder[i]>totalCol){
+      cout << "Wrong Column Entry for sorting" << endl;
+      return 0;
+    }
+  }
   long long int Mb = atoi(argv[3]);
   long long int mainMem = 1024*1024*Mb;
   long long int totalRecords = findRecNum(Mb,argv[1]);
@@ -137,35 +285,42 @@ int main(int argc, char** argv){
   long long int remainingRecords = totalRecords;
   ifstream inFile(argv[1]);
   string line;
-  vector <vector <string> > vec(min(remainingRecords,recordPerFile),vector <string>(totalCol));
+  vector <vector <string> > vec(recordPerFile,vector <string>(totalCol));
   long long int i=0,fileNum=0;
   cout << recordPerFile << " " << totalRecords << " " << vec[0].size()<< endl;
+  int index = 0;
   while(getline(inFile,line)){
-    cout << i << endl;
-    if(line.empty())
-      break;
-    long long int j = 0;
-    istringstream iss(line);
-    while(iss && j<totalCol){
-      iss >> vec[i][j];
-      j++;
+    //cout << i << endl;
+    vector <string> tempStr;
+    index = 0;
+    for(int q=0;q<colData.size();q++){
+      // tempStr.push_back(line.substr(index,colData[q]));
+      vec[i][q] = line.substr(index,colData[q]);
+      index += colData[q] + 2;
     }
     i++;
     if(i==recordPerFile){
+      //cout << remainingRecords << endl;
+      //cout << "wrong loop" << endl;
+      writeToFile(vec,fileNum,min(remainingRecords,recordPerFile));
+      countPerFile.push_back(min(remainingRecords,recordPerFile));
       remainingRecords -= recordPerFile;
-      cout << "wrong loop" << endl;
-      writeToFile(vec,fileNum);
       i=0;
       fileNum++;
-      vector <vector <string> > vec(min(remainingRecords,recordPerFile),vector <string>(totalCol));
+      vector <vector <string> > vec(recordPerFile,vector <string>(totalCol));
     }
   }
   if(i!=0){
-    cout << "finally" << endl;
-    writeToFile(vec,fileNum);
+    //cout << "finally" << endl;
+    writeToFile(vec,fileNum,min(remainingRecords,recordPerFile));
+    countPerFile.push_back(min(remainingRecords,recordPerFile));
   }
-  //}
-  //done till here
-  //Merging Remaining
+  //cout << "writing data" << endl;
+  for(int i=0;i<countPerFile.size();i++)
+    cout << countPerFile[i] << " ";
+  cout << endl;
+  long long int blockSize = 1000;
+  cout << fileNum << endl;
+  merge(argv[2],fileNum+1,blockSize,totalCol);
   return 0;
 }
