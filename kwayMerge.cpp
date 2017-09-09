@@ -6,8 +6,8 @@
 using namespace std;
 
 typedef struct node{
-  int size;
-  int col;
+  long long int size;
+  long long int col;
 }node;
 
 vector <int> compareOrder;
@@ -18,7 +18,7 @@ unsigned int FileRead( istream & is, vector <char> & buff ) {
   return is.gcount();
 }
 
-unsigned int CountLines( const vector <char> & buff, int sz ) {
+unsigned long long int CountLines( const vector <char> & buff, int sz ) {
   int newlines = 0;
   const char * p = &buff[0];
   for ( int i = 0; i < sz; i++ )
@@ -52,11 +52,11 @@ node rowSize(){
   return data;
 }
 
-int findRecNum(int Mb,char* fileName){
-  const int SZ = 1024*1024*Mb;
+long long int findRecNum(long long int Mb,char* fileName){
+  const long long int SZ = 1024*1024*Mb;
   vector <char> buff(SZ);
   ifstream ifs(fileName);
-  int n = 0;
+  long long int n = 0;
   while( int cc = FileRead( ifs, buff ) )
     n += CountLines( buff, cc );
   return n;
@@ -64,7 +64,7 @@ int findRecNum(int Mb,char* fileName){
 
 
 //not complete
-bool breakCond(int Mb,int totalRecords,int Rsize){
+bool breakCond(long long int Mb,long long int totalRecords,long long int Rsize){
   int size = 1024*1024*Mb;
   return false;
   //return (size/Rsize)*()
@@ -88,13 +88,25 @@ void writeToFile(vector <vector <string> > vec,int fileNum){
   fileName = convert.str() + ".txt";
   cout << fileName << endl;
   ofstream myfile(fileName.c_str());
+  // for(int i = 0;i<vec.size();i++){
+  //   for(int j=0;j<vec[0].size();j++)
+  //     cout << vec[i][j] << " ";
+  //   cout << endl;
+  // }
   sort(vec.begin(),vec.end(),sortAsc);
+  // cout << "sorting done !" << endl;
+  // for(int i = 0;i<vec.size();i++){
+  //   for(int j=0;j<vec[0].size();j++)
+  //     cout << vec[i][j] << " ";
+  //   cout << endl;
+  // }
+  //}
   if(myfile.is_open()){
     for(int i=0;i<vec.size();i++){
       string s = vec[i][0];
       for(int j=1;j<vec[0].size()-1;j++)
-        s = s + ' ' + vec[i][j];
-      s = s + ' ' + vec[i][vec[0].size()] + '\n';
+        s = s + " " + vec[i][j];
+      s = s + " " + vec[i][vec[0].size()-1] + '\n';
       myfile << s;
     }
     myfile.close();
@@ -103,8 +115,8 @@ void writeToFile(vector <vector <string> > vec,int fileNum){
 
 int main(int argc, char** argv){
   node data = rowSize();
-  int Rsize = data.size;
-  int totalCol = data.col;
+  long long int Rsize = data.size;
+  long long int totalCol = data.col;
   if(Rsize==0)
     return 0;
   if(argc<5){
@@ -114,39 +126,45 @@ int main(int argc, char** argv){
   for(int i=5;i<argc;i++)
     compareOrder.push_back(atoi((string(argv[i]).substr(1,strlen(argv[i]))).c_str()));
   compareLen = compareOrder.size();
-  int Mb = atoi(argv[3]);
-  int mainMem = 1024*1024*Mb;
-  int totalRecords = findRecNum(Mb,argv[1]);
+  long long int Mb = atoi(argv[3]);
+  long long int mainMem = 1024*1024*Mb;
+  long long int totalRecords = findRecNum(Mb,argv[1]);
   if(breakCond(Mb,totalRecords,Rsize)){
     cout << "Too big data to sort." << endl;
     return 0;
   }
-  int recordPerFile = mainMem/Rsize;
-  cout << recordPerFile << endl;
+  long long int recordPerFile = mainMem/Rsize;
+  long long int remainingRecords = totalRecords;
   ifstream inFile(argv[1]);
   string line;
-  vector <vector <string> > vec(recordPerFile,vector <string>(1000));
-  int i=0,fileNum=0;
+  vector <vector <string> > vec(min(remainingRecords,recordPerFile),vector <string>(totalCol));
+  long long int i=0,fileNum=0;
+  cout << recordPerFile << " " << totalRecords << " " << vec[0].size()<< endl;
   while(getline(inFile,line)){
+    cout << i << endl;
+    if(line.empty())
+      break;
+    long long int j = 0;
     istringstream iss(line);
-    string s;
-    int j = 0;
-    while(getline(iss,s,' ')){
-      vec[i][j] = s.c_str();
+    while(iss && j<totalCol){
+      iss >> vec[i][j];
       j++;
     }
     i++;
     if(i==recordPerFile){
+      remainingRecords -= recordPerFile;
+      cout << "wrong loop" << endl;
       writeToFile(vec,fileNum);
       i=0;
       fileNum++;
-      vector <vector <string> > vec(recordPerFile,vector <string>(totalCol));
+      vector <vector <string> > vec(min(remainingRecords,recordPerFile),vector <string>(totalCol));
     }
   }
   if(i!=0){
+    cout << "finally" << endl;
     writeToFile(vec,fileNum);
-    vector <vector <string> > vec(recordPerFile,vector <string>(totalCol));
   }
+  //}
   //done till here
   //Merging Remaining
   return 0;
