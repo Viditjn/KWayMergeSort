@@ -75,7 +75,7 @@ long long int findRecNum(long long int Mb,char* fileName){
   return n;
 }
 
-
+long long int BlockSize;
 //not complete
 bool breakCond(long long int Mb,long long int totalRecords,long long int Rsize){
   long long int size = 1024*1024*Mb;
@@ -83,6 +83,7 @@ bool breakCond(long long int Mb,long long int totalRecords,long long int Rsize){
   long long int totalPage = ceil(totalRecords/rperPage);
   if(size/((totalPage+1)*Rsize) < 1)
     return true;
+  BlockSize = size/((totalPage+1)*Rsize);
   return false;
   //return (size/Rsize)*()
 }
@@ -110,7 +111,7 @@ int operator() (const record& a,const record& b) const {
     if(a.data[compareOrder[i]]==b.data[compareOrder[i]])
       i++;
     else{
-      if(sortOrder == 0)
+      if(sortOrder == 1)
         return (a.data[compareOrder[i]] < b.data[compareOrder[i]]);
       else
         return (a.data[compareOrder[i]] > b.data[compareOrder[i]]);
@@ -130,26 +131,29 @@ void writeToFile(vector <vector <string> > vec,int fileNum,long long int sizeL){
       string s = vec[i][0];
       for(int j=1;j<vec[0].size()-1;j++)
         s = s + "  " + vec[i][j];
-      s = s + "  " + vec[i][vec[0].size()-1] + '\n';
+      s = s + "  " + vec[i][vec[0].size()-1] + '\r'+'\n';
       myfile << s;
     }
     myfile.close();
   }
 }
-
+long long int totalLines = 0;
 void writeData(ofstream& out, vector <vector <string> > outBuf){
   //cout << "writing data iter" << endl;
+  totalLines = 0;
   if(out.is_open()){
     for(long long int i=0;i<outBuf.size();i++){
       string s = outBuf[i][0];
-      if(s.empty()==true)
-        break;
+      totalLines++;
+      // if(s.empty()==true)
+      //   break;
       for(long long int j=1;j<outBuf[0].size()-1;j++)
         s = s + "  " + outBuf[i][j];
-      s = s + "  " + outBuf[i][outBuf[0].size()-1] + '\n';
+      s = s + "  " + outBuf[i][outBuf[0].size()-1] + '\r'+'\n';
       out << s;
     }
   }
+  //cout << totalLines << endl;
   return;
 }
 
@@ -159,9 +163,12 @@ void merge(string outFile,int totalFiles,long long int blockSize,long long int t
   vector <vector <record> > vecR(totalFiles);
   vector < ifstream* > filePointers;
   vector <int> vecCount(totalFiles);
+  vector <long long int> vTotal(totalFiles);
+  vector <long long int> vRotal(totalFiles);
   for(int i=0;i<totalFiles;i++)
-    vecCount[i] = 0;
-  vector <vector <string> > outBuffer(blockSize,vector <string>(totalCol));
+    vecCount[i] = vTotal[i] = vRotal[i] = 0;
+  //vector <vector <string> > outBuffer(blockSize,vector <string>(totalCol));
+  vector <vector <string> > outBuffer;
   for(int i = 0;i<totalFiles;i++){
     ifstream *ftmp = new ifstream((to_string(i)+ ".txt").c_str());
     filePointers.push_back(ftmp);
@@ -171,7 +178,8 @@ void merge(string outFile,int totalFiles,long long int blockSize,long long int t
     long long int co = 0;
     vector <record> ans;
     string line;
-    while(getline(*filePointers[i],line) && co<blockSize){
+    while(co<blockSize && getline(*filePointers[i],line)){
+      //vTotal[i]++;
       countPerFile[i]--;
       vector <string> tempStr;
       index = 0;
@@ -197,6 +205,7 @@ void merge(string outFile,int totalFiles,long long int blockSize,long long int t
   for(int i=0;i<totalFiles;i++){
     if(vecR[i].size()>0){
       pq.push(vecR[i][0]);
+      vTotal[i]++;
       totalPush++;
     }
   }
@@ -206,15 +215,17 @@ void merge(string outFile,int totalFiles,long long int blockSize,long long int t
     if(i == blockSize){
       writeData(outPointer,outBuffer);
       i = 0;
-      vector <vector <string> > outBuffer(blockSize,vector <string>(totalCol));
+      outBuffer.clear();
     }
     record tmp = pq.top();
     pq.pop();
     totalCo++;
-    outBuffer[i] = tmp.data;
+    outBuffer.push_back(tmp.data);
+    vRotal[tmp.fiNum]++;
     i++;
     vecCount[tmp.fiNum]++;
     if(vecCount[tmp.fiNum]<vecR[tmp.fiNum].size()){
+      vTotal[tmp.fiNum]++;
       pq.push(vecR[tmp.fiNum][vecCount[tmp.fiNum]]);
       totalPush++;
     }
@@ -222,7 +233,7 @@ void merge(string outFile,int totalFiles,long long int blockSize,long long int t
       long long int co = 0;
       vector <record> ans;
       string line;
-      while(getline(*filePointers[tmp.fiNum],line) && co<blockSize){
+      while(co<blockSize && getline(*filePointers[tmp.fiNum],line)){
         countPerFile[tmp.fiNum]--;
         vector <string> tempStr;
         index = 0;
@@ -286,13 +297,19 @@ int main(int argc, char** argv){
   }
   long long int recordPerFile = mainMem/Rsize;
   long long int remainingRecords = totalRecords;
-  ifstream inFile(argv[1]);
+  ifstream inFile;
+  inFile.open(argv[1]);
+  if(!inFile.is_open()){
+    cout << "Error : Check Filename " << endl;
+    return 0;
+  }
+
   string line;
   vector <vector <string> > vec(recordPerFile,vector <string>(totalCol));
-  long long int i=0,fileNum=0;
-  // cout << recordPerFile << " " << totalRecords << " " << vec[0].size()<< endl;
+  long long int i=0,fileNum=0,totalL=0;
   int index = 0;
   while(getline(inFile,line)){
+    totalL++;
     vector <string> tempStr;
     index = 0;
     for(int q=0;q<colData.size();q++){
@@ -313,7 +330,6 @@ int main(int argc, char** argv){
     writeToFile(vec,fileNum,min(remainingRecords,recordPerFile));
     countPerFile.push_back(min(remainingRecords,recordPerFile));
   }
-  long long int blockSize = 1000;
-  merge(argv[2],fileNum+1,blockSize,totalCol);
+  merge(argv[2],fileNum+1,BlockSize,totalCol);
   return 0;
 }
