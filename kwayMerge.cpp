@@ -92,7 +92,7 @@ bool sortAsc(const vector<string> a,const vector<string> b){
   int i;
   for(i=0;i<compareLen;i++){
     if(a[compareOrder[i]]==b[compareOrder[i]])
-      i++;
+      continue;
     else{
       if(sortOrder == 0)
         return (a[compareOrder[i]] < b[compareOrder[i]]);
@@ -109,7 +109,7 @@ int operator() (const record& a,const record& b) const {
   int i;
   for(i=0;i<compareLen;i++){
     if(a.data[compareOrder[i]]==b.data[compareOrder[i]])
-      i++;
+      continue;
     else{
       if(sortOrder == 1)
         return (a.data[compareOrder[i]] < b.data[compareOrder[i]]);
@@ -331,5 +331,8 @@ int main(int argc, char** argv){
     countPerFile.push_back(min(remainingRecords,recordPerFile));
   }
   merge(argv[2],fileNum+1,BlockSize,totalCol);
+  for(int i=0;i<fileNum+1;i++)
+    if (remove((to_string(i)+ ".txt").c_str()) !=0)
+      cout<<"Remove operation failed"<<endl;
   return 0;
 }
